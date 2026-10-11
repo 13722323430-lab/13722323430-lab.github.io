@@ -942,10 +942,11 @@ section.block { padding: 96px 0 0; }
 }
 .player video {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: auto;   /* 必须显式覆盖 HTML height 属性的表现性提示，否则元素被撑成方形、画面四周露黑底 */
   display: block;
   background: #000;
   object-fit: contain;
+  /* 不写死比例：由各 <video> 标签的 width/height 属性提供真实宽高比（16:9 / 3:2 / 竖屏各自成立） */
 }
 .player .player-cover {
   position: absolute; inset: 0;
