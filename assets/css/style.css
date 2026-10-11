@@ -42,7 +42,9 @@ body {
 ::selection { background: var(--accent-soft); color: var(--text); }
 
 a { color: inherit; text-decoration: none; }
-img { display: block; max-width: 100%; }
+/* height:auto 与 <img> 上的 width/height 属性配合：
+   属性只负责提供宽高比用于预留空间，实际高度仍由 CSS 决定。 */
+img { display: block; max-width: 100%; height: auto; }
 button { font-family: inherit; cursor: pointer; }
 
 .container {
@@ -50,20 +52,23 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0 auto;
 }
 
-/* ---------------- 滚动渐显（模糊淡入） ---------------- */
+/* ---------------- 滚动渐显（淡入 + 轻微上浮） ----------------
+   性能说明：不使用 filter 模糊过渡。
+   过渡 filter 会让每个元素独占一个合成层并逐帧重算 GPU 采样，
+   一页 30+ 个元素同时滚入时开销极高，是滚动卡顿的首要来源。
+   改用 opacity + transform（走合成器，不触碰主线程绘制），
+   观感几乎一致，帧率显著更稳。 */
 .reveal {
   opacity: 0;
   transform: translateY(16px);
-  filter: blur(6px);
-  transition: opacity 0.9s var(--ease), transform 0.9s var(--ease),
-    filter 0.9s var(--ease);
+  transition: opacity 0.9s var(--ease), transform 0.9s var(--ease);
   transition-delay: var(--d, 0s);
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
 }
 .reveal.is-visible {
   opacity: 1;
   transform: none;
-  filter: none;
+  will-change: auto;
 }
 
 /* ---------------- 导航 ---------------- */
@@ -71,9 +76,11 @@ button { font-family: inherit; cursor: pointer; }
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  background: rgba(250, 249, 247, 0.82);
+  /* 原为 backdrop-filter: blur(16px) 毛玻璃。
+     固定顶栏的毛玻璃要在每一帧滚动时重新采样整幅背景，
+     是持续性的帧率负担；页面底色本就接近白，改用高不透明度
+     实色后视觉差别微乎其微，滚动开销几乎归零。 */
+  background: rgba(250, 249, 247, 0.95);
   border-bottom: 1px solid var(--line);
 }
 .nav-inner {
@@ -188,7 +195,9 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-block;
   opacity: 0;
   transform: translateY(14px);
-  filter: blur(8px);
+  /* 模糊半径由 8px 降至 4px：入场观感基本一致，
+     但逐字模糊的 GPU 采样开销约减半（仅在首屏播放一次）。 */
+  filter: blur(4px);
   transition: opacity 0.8s var(--ease), transform 0.8s var(--ease),
     filter 0.8s var(--ease);
   transition-delay: var(--d, 0s);
@@ -329,6 +338,12 @@ button { font-family: inherit; cursor: pointer; }
   animation: marqueeMove 36s linear infinite;
 }
 .marquee:hover .marquee-track { animation-play-state: paused; }
+/* 横幅滚出视口后暂停：无限动画常驻会一直占用合成器，
+   页面滚到下方时属于纯浪费。 */
+.marquee-wrap.is-offscreen .marquee-track {
+  animation-play-state: paused;
+  will-change: auto;
+}
 .marquee-track span {
   font-size: 15px;
   font-weight: 700;
@@ -423,8 +438,7 @@ section.block { padding: 96px 0 0; }
   letter-spacing: 0.14em;
   padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(11, 11, 13, 0.62);
-  backdrop-filter: blur(8px);
+  background: rgba(11, 11, 13, 0.74);
   border: 1px solid var(--line-strong);
   color: var(--text);
 }
@@ -439,8 +453,7 @@ section.block { padding: 96px 0 0; }
   padding: 6px 12px;
   border: 1px solid rgba(217, 165, 88, 0.4);
   border-radius: 999px;
-  background: rgba(11, 11, 13, 0.55);
-  backdrop-filter: blur(8px);
+  background: rgba(11, 11, 13, 0.68);
 }
 .work-info {
   padding: 24px 26px 26px;
@@ -493,8 +506,7 @@ section.block { padding: 96px 0 0; }
   font-size: 12.5px;
   padding: 7px 14px;
   border-radius: 999px;
-  background: rgba(11, 11, 13, 0.66);
-  backdrop-filter: blur(8px);
+  background: rgba(11, 11, 13, 0.78);
   border: 1px solid var(--line-strong);
   color: var(--text-sub);
   letter-spacing: 0.04em;
@@ -574,8 +586,7 @@ section.block { padding: 96px 0 0; }
   letter-spacing: 0.14em;
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(11, 11, 13, 0.62);
-  backdrop-filter: blur(8px);
+  background: rgba(11, 11, 13, 0.74);
   border: 1px solid rgba(255, 255, 255, 0.28);
   color: #e8e5df;
 }
@@ -1328,8 +1339,7 @@ section.block { padding: 96px 0 0; }
   position: fixed;
   inset: 0;
   z-index: 300;
-  background: rgba(5, 5, 7, 0.92);
-  backdrop-filter: blur(10px);
+  background: rgba(5, 5, 7, 0.95);
   display: grid;
   place-items: center;
   padding: 4vh 4vw;
@@ -1476,7 +1486,7 @@ section.block { padding: 96px 0 0; }
   .work-info { padding: 18px 18px 20px; }
   .footer { padding: 64px 0 32px; margin-top: 80px; }
   /* 移动端简化动效：跳过模糊与位移，仅保留淡入 */
-  .reveal { filter: none; transform: none; transition: opacity 0.6s ease; }
+  .reveal { transform: none; transition: opacity 0.6s ease; }
   .hero-title-v .char { filter: none; transform: none; }
   .work-card:hover, .skill-card:hover { transform: none; }
   .work-cover img { transition: none; }

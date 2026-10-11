@@ -61,6 +61,18 @@
     revealEls.forEach(function (el) { el.classList.add("is-visible"); });
   }
 
+  /* ---------------- 横幅跑马灯：滚出视口即暂停 ----------------
+     无限循环动画会一直占用合成器；页面滚到下方后它已不可见，
+     继续播放纯属浪费，暂停后滚动更稳。 */
+  document.querySelectorAll(".marquee-wrap").forEach(function (wrap) {
+    if (!("IntersectionObserver" in window)) return;
+    new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        wrap.classList.toggle("is-offscreen", !e.isIntersecting);
+      });
+    }, { threshold: 0 }).observe(wrap);
+  });
+
   /* ---------------- Toast ---------------- */
   var toastEl = document.querySelector(".toast");
   var toastTimer = null;
@@ -193,6 +205,10 @@
        ========================================================== */
     var sourceUrl = video.getAttribute("src") || "";
     var blobUrl = null, caching = false, swapped = false, pendingRatio = null;
+    /* 整片缓存的内存上限。超过这个体积的视频不再全量读进内存，
+       否则几十 MB 的 Blob 会造成明显的内存压力与主线程卡顿。 */
+    var CACHE_LIMIT = 24 * 1024 * 1024;
+    var probed = false, rangeOk = false, tooBig = false;
 
     function seekableNow() {
       return !!(video.seekable && video.seekable.length && video.seekable.end(0) > 0);
@@ -223,47 +239,82 @@
       });
       return true;
     }
-    function startCache() {
+    /* 用一个带 Range 的 HEAD 请求一次探明两件事：
+       1) 服务端是否支持 Range —— 支持就根本不需要整片缓存（GitHub Pages 属于这类）；
+       2) 文件有多大 —— 太大就不值得整片读进内存。
+       用 Promise 缓存结果：拖动进度条会连续触发多次 startCache，
+       必须等同一次探测的结果，不能让后到的调用读到未赋值的默认值。 */
+    var probePromise = null;
+    function probeCache() {
+      if (!probePromise) {
+        probePromise = (typeof fetch === "function"
+          ? fetch(sourceUrl, { method: "HEAD", headers: { Range: "bytes=0-1" } })
+              .then(function (res) {
+                rangeOk = res.status === 206;
+                var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;
+                tooBig = total > CACHE_LIMIT;
+              })
+              .catch(function () {})
+          : Promise.resolve());
+      }
+      return probePromise;
+    }
+
+    /* reason: "auto" = 点播放时顺手后台缓存；"user" = 用户主动拖了进度条 */
+    function startCache(reason) {
       if (caching || swapped || blobUrl || !sourceUrl) return;
-      if (seekableNow()) return;   // 服务端支持 Range，无需缓存
-      if (typeof fetch !== "function" || typeof Blob !== "function" ||
-          !window.URL || !URL.createObjectURL) return;
-      caching = true;
-      note("正在缓存完整视频，之后即可拖动进度条…", true);
-      fetch(sourceUrl)
-        .then(function (res) {
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;
-          if (!res.body || typeof res.body.getReader !== "function") return res.blob();
-          var reader = res.body.getReader(), chunks = [], got = 0;
-          return (function pump() {
-            return reader.read().then(function (r) {
-              if (r.done) return new Blob(chunks, { type: "video/mp4" });
-              chunks.push(r.value);
-              got += r.value.length;
-              if (total) {
-                var pct = got / total;
-                if (buffer) buffer.style.width = Math.min(100, pct * 100).toFixed(1) + "%";
-                note("正在缓存完整视频… " + Math.round(pct * 100) + "%", true);
-              }
-              return pump();
-            });
-          })();
-        })
-        .then(function (blob) {
-          if (!(blob instanceof Blob)) { caching = false; return; }
-          blobUrl = URL.createObjectURL(blob);
-          caching = false;
-          if (buffer) buffer.style.width = "100%";
-          note("已缓存 · 现在可以拖动进度条快进 / 回看", true);
-          setTimeout(function () { note("", false); }, 3600);
-          if (pendingRatio !== null) applyBlob(pendingRatio);
-          else if (video.paused) applyBlob(null);   // 暂停时静默换源，不打断观看
-        })
-        .catch(function () {
-          caching = false;
-          note("", false);
-        });
+      if (seekableNow()) return;   // 已确认可定位，无需缓存
+      if (typeof Blob !== "function" || !window.URL || !URL.createObjectURL) return;
+      probeCache().then(function () {
+        if (rangeOk) return;       // 支持 Range，原生就能拖动，不用折腾
+        if (tooBig) {              // 体积过大：放弃整片缓存，避免几十 MB 压垮内存
+          if (reason !== "auto") {
+            note("该视频体积较大，未整片缓存；播放与暂停不受影响", true);
+            setTimeout(function () { note("", false); }, 4200);
+          }
+          return;
+        }
+        if (caching || swapped || blobUrl) return;
+        caching = true;
+        note("正在缓存完整视频，之后即可拖动进度条…", true);
+        /* 必须加查询参数：服务端不支持 Range 时，<video> 自己对同一 URL 的
+           请求迟迟不结束，浏览器会把同 URL 的 fetch 去重挂起，永远等不到响应。 */
+        var url = sourceUrl + (sourceUrl.indexOf("?") < 0 ? "?" : "&") + "fullcache=1";
+        fetch(url)
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            var total = parseInt(res.headers.get("content-length") || "0", 10) || 0;
+            if (!res.body || typeof res.body.getReader !== "function") return res.blob();
+            var reader = res.body.getReader(), chunks = [], got = 0;
+            return (function pump() {
+              return reader.read().then(function (r) {
+                if (r.done) return new Blob(chunks, { type: "video/mp4" });
+                chunks.push(r.value);
+                got += r.value.length;
+                if (total) {
+                  var pct = got / total;
+                  if (buffer) buffer.style.width = Math.min(100, pct * 100).toFixed(1) + "%";
+                  note("正在缓存完整视频… " + Math.round(pct * 100) + "%", true);
+                }
+                return pump();
+              });
+            })();
+          })
+          .then(function (blob) {
+            if (!(blob instanceof Blob)) { caching = false; return; }
+            blobUrl = URL.createObjectURL(blob);
+            caching = false;
+            if (buffer) buffer.style.width = "100%";
+            note("已缓存 · 现在可以拖动进度条快进 / 回看", true);
+            setTimeout(function () { note("", false); }, 3600);
+            if (pendingRatio !== null) applyBlob(pendingRatio);
+            else if (video.paused) applyBlob(null);   // 暂停时静默换源，不打断观看
+          })
+          .catch(function () {
+            caching = false;
+            note("", false);
+          });
+      });
     }
     /* 统一的"要跳转到 ratio"入口：能定位就直接跳，否则走缓存流程 */
     function requestSeek(ratio) {
@@ -273,7 +324,7 @@
       paintRatio(ratio);
       if (timeEl && video.duration) timeEl.textContent = fmt(ratio * video.duration) + " / " + fmt(video.duration);
       var wasCaching = caching;
-      startCache();
+      startCache("user");
       return wasCaching ? "caching" : "started";
     }
 
@@ -289,7 +340,7 @@
     video.addEventListener("play", function () {
       if (playBtn) playBtn.textContent = "❚❚";
       wake();
-      startCache();   // 若服务端不支持 Range，开始后台缓存，为拖动进度条做准备
+      startCache("auto");   // 服务端不支持 Range 时才后台缓存；超大文件会自动放弃
     });
     video.addEventListener("pause", function () {
       if (playBtn) playBtn.textContent = "▶";
