@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://13722323430-lab.github.io/sitemap.xml

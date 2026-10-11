@@ -84,10 +84,8 @@
     toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2600);
   }
 
-  /* ---------------- 图片占位（素材未放置时优雅降级） ---------------- */
+  /* ---------------- 图片容错（加载失败时避免留白） ---------------- */
   function buildPlaceholder(img) {
-    var name = img.getAttribute("data-ph") || "待放置素材";
-    var tip = img.getAttribute("data-ph-tip") || "将素材放入 assets 目录后自动显示";
     var div = document.createElement("div");
     div.className = "ph-img";
     div.style.minHeight = (img.getAttribute("data-ph-minh") || "200") + "px";
@@ -100,8 +98,7 @@
     div.innerHTML =
       '<div class="ph-inner">' +
       '<div class="ph-icon">🖼</div>' +
-      '<div class="ph-name">' + name + "</div>" +
-      '<div class="ph-tip">' + tip + "</div>" +
+      '<div class="ph-name">图片暂不可用</div>' +
       "</div>";
     if (img.parentNode) img.parentNode.replaceChild(div, img);
   }
@@ -111,7 +108,7 @@
     if (img.complete && img.naturalWidth === 0) buildPlaceholder(img);
   });
 
-  /* ---------------- 视频素材检测 ---------------- */
+  /* ---------------- 视频容错 ---------------- */
   document.querySelectorAll("video[data-ph]").forEach(function (v) {
     v.addEventListener("error", function () {
       var cover = v.parentElement.querySelector(".player-cover");
@@ -120,8 +117,8 @@
       if (inner) {
         inner.innerHTML =
           '<div class="ph-icon" style="font-size:28px">🎬</div>' +
-          '<div class="pc-title">原片视频待放置</div>' +
-          '<div class="pc-note">请将视频文件放入 assets/videos/ 目录（见素材放置说明），刷新后即可在页面内直接播放。</div>';
+          '<div class="pc-title">视频暂不可用</div>' +
+          '<div class="pc-note">请稍后刷新重试。</div>';
       }
       cover.classList.remove("hide");
     });
@@ -477,11 +474,11 @@
             a.remove();
             toast("简历开始下载");
           } else {
-            toast("简历文件待上传：放入 assets/files/ 后即可下载");
+            toast("简历暂时无法下载，请稍后重试");
           }
         })
         .catch(function () {
-          toast("简历文件待上传：放入 assets/files/ 后即可下载");
+          toast("简历暂时无法下载，请稍后重试");
         });
     });
   });
