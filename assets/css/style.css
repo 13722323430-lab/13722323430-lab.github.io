@@ -1138,6 +1138,19 @@ section.block { padding: 96px 0 0; }
 .prose + .prose { margin-top: 14px; }
 .prose em { font-style: normal; color: var(--text); }
 
+/* 引文：作品页自述里的核心提问 */
+.pull-quote {
+  max-width: 800px;
+  margin: 8px 0 4px;
+  padding: 6px 0 6px 24px;
+  border-left: 2px solid var(--accent);
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.85;
+  color: var(--text);
+}
+.pull-quote b { color: var(--accent); font-weight: 600; }
+
 .quote-block {
   margin-top: 26px;
   padding: 26px 30px;
