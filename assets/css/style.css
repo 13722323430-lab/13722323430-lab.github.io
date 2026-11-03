@@ -971,8 +971,10 @@ section.block { padding: 96px 0 0; }
 .player-cover .pc-play {
   width: 84px; height: 84px;
   border-radius: 50%;
-  border: 1px solid rgba(217, 165, 88, 0.5);
-  background: rgba(217, 165, 88, 0.12);
+  border: 1px solid rgba(217, 165, 88, 0.55);
+  background: rgba(12, 12, 15, 0.38);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   display: grid;
   place-items: center;
   font-size: 26px;
@@ -986,12 +988,14 @@ section.block { padding: 96px 0 0; }
 .player-cover .pc-title {
   font-size: 13px;
   letter-spacing: 0.22em;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.65);
 }
 .player-cover .pc-note {
   font-size: 12px;
-  color: var(--text-dim);
-  opacity: 0.75;
+  color: rgba(255, 255, 255, 0.66);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+  opacity: 1;
   max-width: 400px;
   line-height: 1.7;
 }
